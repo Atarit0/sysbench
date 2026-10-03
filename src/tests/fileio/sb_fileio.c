@@ -20,8 +20,49 @@
 # include "config.h"
 #endif
 
-#ifdef _WIN32
+#if defined(_WIN32) && !defined(__MINGW32__)
 #include "sb_win.h"
+#endif
+
+#if defined(__MINGW32__)
+#include <windows.h>
+#include <io.h>
+#ifndef O_FSYNC
+#define O_FSYNC 0
+#endif
+static int fsync(int fd) { return _commit(fd); }
+/* MinGW/MSVCRT has no pread/pwrite; emulate with ReadFile/WriteFile +
+   OVERLAPPED, which performs an atomic positioned I/O without touching
+   the file pointer or requiring per-thread locking (true pread semantics,
+   not lseek+read which would race under concurrent threads on one fd). */
+static ssize_t pread(int fd, void *buf, size_t count, long long offset)
+{
+  HANDLE h = (HANDLE)_get_osfhandle(fd);
+  OVERLAPPED ov;
+  DWORD bytes = 0;
+  memset(&ov, 0, sizeof(ov));
+  ov.Offset = (DWORD)(offset & 0xFFFFFFFF);
+  ov.OffsetHigh = (DWORD)(offset >> 32);
+  if (!ReadFile(h, buf, (DWORD)count, &bytes, &ov))
+  {
+    if (GetLastError() == ERROR_HANDLE_EOF)
+      return 0;
+    return -1;
+  }
+  return (ssize_t)bytes;
+}
+static ssize_t pwrite(int fd, const void *buf, size_t count, long long offset)
+{
+  HANDLE h = (HANDLE)_get_osfhandle(fd);
+  OVERLAPPED ov;
+  DWORD bytes = 0;
+  memset(&ov, 0, sizeof(ov));
+  ov.Offset = (DWORD)(offset & 0xFFFFFFFF);
+  ov.OffsetHigh = (DWORD)(offset >> 32);
+  if (!WriteFile(h, buf, (DWORD)count, &bytes, &ov))
+    return -1;
+  return (ssize_t)bytes;
+}
 #endif
 
 #ifdef STDC_HEADERS
@@ -49,7 +90,7 @@
 #ifdef HAVE_SYS_MMAN_H
 # include <sys/mman.h>
 #endif
-#ifdef _WIN32
+#if defined(_WIN32) && !defined(__MINGW32__)
 # include <io.h>
 # include <fcntl.h>
 # include <sys/stat.h>
@@ -68,7 +109,7 @@
 #define FILE_CHECKSUM_LENGTH sizeof(int)
 #define FILE_OFFSET_LENGTH sizeof(long)
 
-#ifdef _WIN32
+#if defined(_WIN32) && !defined(__MINGW32__)
 typedef HANDLE FILE_DESCRIPTOR;
 #define VALID_FILE(fd) (fd != INVALID_HANDLE_VALUE)
 #define SB_INVALID_FILE INVALID_HANDLE_VALUE
@@ -405,7 +446,7 @@ int file_done(void)
   unsigned int  i;
   
   for (i = 0; i < num_files; i++)
-#ifndef _WIN32
+#if !defined(_WIN32) || defined(__MINGW32__)
     close(files[i]);
 #else
     CloseHandle(files[i]);
@@ -903,7 +944,7 @@ static int convert_extra_flags(file_flags_t extra_flags, int *open_flags)
 {
   if (extra_flags == 0)
   {
-#ifdef _WIN32
+#if defined(_WIN32) && !defined(__MINGW32__)
     *open_flags = FILE_ATTRIBUTE_NORMAL;
 #endif
   }
@@ -913,7 +954,7 @@ static int convert_extra_flags(file_flags_t extra_flags, int *open_flags)
 
     if (extra_flags & SB_FILE_FLAG_SYNC)
     {
-#ifdef _WIN32
+#if defined(_WIN32) && !defined(__MINGW32__)
       *open_flags |= FILE_FLAG_WRITE_THROUGH;
 #else
       *open_flags |= O_SYNC;
@@ -937,7 +978,7 @@ static int convert_extra_flags(file_flags_t extra_flags, int *open_flags)
       /* Will call directio(3) later */
 #elif defined(O_DIRECT)
       *open_flags |= O_DIRECT;
-#elif defined _WIN32
+#elif defined(_WIN32) && !defined(__MINGW32__)
       *open_flags |= FILE_FLAG_NO_BUFFERING;
 #else
       log_text(LOG_FATAL,
@@ -992,7 +1033,7 @@ int create_files(void)
       return 1; 
     }
 
-#ifndef _WIN32
+#if !defined(_WIN32) || defined(__MINGW32__)
     offset = (long long) lseek(fd, 0, SEEK_END);
 #else
     offset = (long long) _lseeki64(fd, 0, SEEK_END);
@@ -1020,7 +1061,7 @@ int create_files(void)
     }
     
     /* fsync files to prevent cache flush from affecting test results */
-#ifndef _WIN32
+#if !defined(_WIN32) || defined(__MINGW32__)
     fsync(fd);
 #else
     _commit(fd);
@@ -1353,7 +1394,7 @@ int file_mmap_prepare(void)
   if (test_mode == MODE_WRITE)
     for (i = 0; i < num_files; i++)
     {
-#ifdef _WIN32
+#if defined(_WIN32) && !defined(__MINGW32__)
       HANDLE hFile = files[i];
       LARGE_INTEGER offset;
       offset.QuadPart = file_size;
@@ -1443,7 +1484,7 @@ int file_do_fsync(unsigned int id, int thread_id)
       )
   {
     if (file_fsync_mode == FSYNC_ALL)
-#ifndef _WIN32
+#if !defined(_WIN32) || defined(__MINGW32__)
       return fsync(fd);
 #else
       return !FlushFileBuffers(fd);
@@ -1475,7 +1516,7 @@ int file_do_fsync(unsigned int id, int thread_id)
   /* Use msync on file on 64-bit architectures */
   else if (file_io_mode == FILE_IO_MODE_MMAP)
   {
-#ifndef _WIN32
+#if !defined(_WIN32) || defined(__MINGW32__)
     return msync(mmaps[id], file_size, MS_SYNC | MS_INVALIDATE);
 #else
     return !FlushViewOfFile(mmaps[id], (size_t) file_size);
@@ -1503,7 +1544,7 @@ int file_fsync(unsigned int id, int thread_id)
 }
 
 
-#ifdef _WIN32
+#if defined(_WIN32) && !defined(__MINGW32__)
 ssize_t pread(HANDLE hFile, void *buf, ssize_t count, long long offset)
 {
   DWORD         nBytesRead;
@@ -1964,7 +2005,7 @@ void check_seq_req(sb_file_request_t *prev_req, sb_file_request_t *r)
 */
 unsigned long sb_get_allocation_granularity(void)
 {
-#ifdef _WIN32
+#if defined(_WIN32) && !defined(__MINGW32__)
   SYSTEM_INFO info;
   GetSystemInfo(&info);
   return info.dwAllocationGranularity;
@@ -1975,7 +2016,7 @@ unsigned long sb_get_allocation_granularity(void)
 
 static void sb_free_memaligned(void *buf)
 {
-#ifdef _WIN32
+#if defined(_WIN32) && !defined(__MINGW32__)
   VirtualFree(buf,0,MEM_FREE);
 #else
   free(buf);
@@ -1990,7 +2031,7 @@ static FILE_DESCRIPTOR sb_open(const char *name)
   if (convert_extra_flags(file_extra_flags, &flags))
     return SB_INVALID_FILE;
 
-#ifndef _WIN32
+#if !defined(_WIN32) || defined(__MINGW32__)
   file = open(name, O_RDWR | flags, S_IRUSR | S_IWUSR);
 #else
   file = CreateFile(name, GENERIC_READ|GENERIC_WRITE, 0, NULL, OPEN_EXISTING,
@@ -2019,7 +2060,7 @@ static int sb_create(const char *path)
   FILE_DESCRIPTOR file;
   int res;
 
-#ifndef _WIN32
+#if !defined(_WIN32) || defined(__MINGW32__)
   file = open(path, O_CREAT | O_EXCL, S_IRUSR | S_IWUSR);
   res = !VALID_FILE(file);
   close(file);
