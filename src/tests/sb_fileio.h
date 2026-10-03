@@ -19,7 +19,7 @@
 #ifndef SB_FILEIO_H
 #define SB_FILEIO_H
 
-#ifdef _WIN32
+#if defined(_WIN32) && !defined(__MINGW32__)
 #include "sb_win.h" /* ssize_t defined*/
 #endif
 

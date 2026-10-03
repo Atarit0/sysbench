@@ -19,7 +19,7 @@
 #ifdef HAVE_CONFIG_H
 # include "config.h"
 #endif
-#ifdef _WIN32
+#if defined(_WIN32) && !defined(__MINGW32__)
 #include "sb_win.h"
 #endif
 
@@ -372,7 +372,7 @@ void log_errno(log_msg_priority_t priority, const char *fmt, ...)
   int            old_errno;
   char           *tmp;
 
-#ifdef _WIN32
+#if defined(_WIN32) && !defined(__MINGW32__)
   LPVOID         lpMsgBuf;
   old_errno = GetLastError();
   FormatMessage(FORMAT_MESSAGE_FROM_SYSTEM |
@@ -404,7 +404,7 @@ void log_errno(log_msg_priority_t priority, const char *fmt, ...)
   snprintf(buf + n, TEXT_BUFFER_SIZE - n, " errno = %d (%s)", old_errno,
            tmp);
 
-#ifdef _WIN32
+#if defined(_WIN32) && !defined(__MINGW32__)
   LocalFree(lpMsgBuf);
 #endif
   
