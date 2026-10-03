@@ -20,8 +20,12 @@
 # include "config.h"
 #endif
 
-#ifdef _WIN32
+#if defined(_WIN32) && !defined(__MINGW32__)
 #include "sb_win.h"
+#endif
+
+#if defined(__MINGW32__)
+#include <windows.h>
 #endif
 
 #ifdef STDC_HEADERS
@@ -58,7 +62,7 @@ void *sb_memalign(size_t size, size_t alignment)
 #elif defined (_WIN32)
   /* Allocate on page boundary */
   (void) alignment; /* unused */
-  buffer = VirtualAlloc(NULL, size, MEM_RESERVE|MEM_COMMIT, PAGE_READWRITE);
+  buf = VirtualAlloc(NULL, size, MEM_RESERVE|MEM_COMMIT, PAGE_READWRITE);
 #else
 # error Cannot find an aligned allocation library function!
 #endif

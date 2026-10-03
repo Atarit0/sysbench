@@ -20,8 +20,12 @@
 # include "config.h"
 #endif
 
-#ifdef _WIN32
+#if defined(_WIN32) && !defined(__MINGW32__)
 # include "sb_win.h"
+#endif
+
+#if defined(__MINGW32__)
+#include <windows.h>
 #endif
 
 #ifdef HAVE_PTHREAD_H
