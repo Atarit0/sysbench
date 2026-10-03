@@ -8,11 +8,12 @@ no Linux subsystem, no virtual machine. Upstream dropped native Windows
 support as of sysbench 1.0 and currently points Windows users to WSL
 instead.
 
-There's no binary package for this fork (yet): it's build-from-source
-only, following the steps below. The result is a self-contained
-`sysbench.exe` — it only links against standard Windows system DLLs
-(`ntdll`, `kernel32`, `msvcrt`), so once built it can be copied anywhere
-and run without MSYS2 on the `PATH`.
+This is an unofficial, community fork: it is not affiliated with or
+endorsed by upstream, and the changes here have not been submitted to
+or reviewed by the upstream maintainer. Treat it as experimental.
+
+There's no binary release for this fork (yet): it's build-from-source
+only, following the steps below.
 
 Everything else about sysbench itself — what it is, how to use it, its
 license — is unchanged from upstream; see
@@ -36,9 +37,38 @@ git checkout mingw64-port
 make -j$(nproc)
 ```
 
-`src/sysbench.exe` is the result. Tested with the `cpu` and `fileio`
-benchmarks; `--without-mysql` skips the MySQL driver, which hasn't been
-touched for MinGW and will very likely need its own round of fixes.
+The real binary is `src/.libs/sysbench.exe` — `src/sysbench.exe` is
+only a libtool wrapper that launches it. The binary imports
+`libwinpthread-1.dll` from the MinGW-w64 toolchain (besides the standard
+Windows `kernel32.dll` and `msvcrt.dll`), so to run it outside an MSYS2
+shell, copy `/mingw64/bin/libwinpthread-1.dll` next to it.
+
+## What has been tested
+
+- **Run on Windows x64:** the `cpu` and `fileio` benchmarks.
+- **Compiled, only briefly smoke-run:** `memory`, `threads`, `mutex`.
+- **Not built at all:** the MySQL driver (excluded via `--without-mysql`)
+  and the PostgreSQL driver (off by default). Neither has been touched
+  for MinGW, so the bundled `oltp_*` database benchmarks are not
+  available in this build.
+
+## Known issues
+
+- **Crash on exit.** Every run currently segfaults during shutdown, after
+  the results have been printed (exit status 139 / `0xC0000005`). On
+  MinGW, `sb_memalign()` takes its `VirtualAlloc()` branch, but callers
+  release that memory with `free()`. The printed results are complete,
+  but the exit status is not usable in scripts yet.
+- `alarm()` is stubbed out as a no-op, so the watchdogs that use it
+  (thread-init timeout, and the `--time` + `--timeout` hard stop) never
+  fire on Windows.
+- `random()`/`srandom()` are mapped to `rand()`/`srand()`. MSVCRT's
+  `rand()` only returns 15 bits, so the per-thread RNG seeds have less
+  entropy than on Linux.
+- The `-DDATADIR`/`-DLIBDIR` removal (fix 5 below) applies to every
+  platform on this branch, not only Windows: bundled Lua scripts are
+  looked up relative to the current directory instead of the install
+  prefix.
 
 ## How we got there
 
@@ -78,15 +108,18 @@ branch history for the full detail on each):
    intact regardless of quoting style tried; dropped from the command
    line in favor of a `#ifndef DATADIR` fallback in `sysbench.h`.
 
-None of this touches sysbench's actual benchmark logic — every fix is
+None of this changes the benchmark workloads themselves. Every fix is
 either a compatibility shim for something Windows genuinely lacks, or
 telling the preprocessor to treat MinGW like the POSIX host it mostly
-is instead of like 2005-era MSVC.
+is instead of like 2005-era MSVC. The side effects of those shims are
+listed under [Known issues](#known-issues).
 
 ## License
 
 GPL-2.0-or-later, same as upstream — see [COPYING](COPYING). Original
-copyright: MySQL AB (2004) and Alexey Kopytov (2004-2017).
+copyright: MySQL AB (2004-2006) and Alexey Kopytov (2004-2018), as
+stated in the individual source file headers. The changes in this fork
+are distributed under the same license.
 
 [license-badge]: https://img.shields.io/badge/license-GPL--2.0--or--later-blue.svg
 [license-url]: COPYING
