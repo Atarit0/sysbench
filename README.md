@@ -11,6 +11,8 @@ instead.
 This is an unofficial, community fork: it is not affiliated with or
 endorsed by upstream, and the changes here have not been submitted to
 or reviewed by the upstream maintainer. Treat it as experimental.
+The port is based on the sysbench **1.0.20** release, not on upstream's
+current `master`.
 
 There's no binary release for this fork (yet): it's build-from-source
 only, following the steps below.
