@@ -19,6 +19,27 @@
 #ifndef SYSBENCH_H
 #define SYSBENCH_H
 
+#if defined(__MINGW32__)
+#include <windows.h>
+/* MinGW has no SIGALRM/alarm() (no POSIX interval timers on Windows).
+   These guard a thread-init-timeout watchdog only - stubbing alarm() as a
+   no-op means that particular watchdog never fires on Windows, everything
+   else is unaffected. */
+#ifndef SIGALRM
+#define SIGALRM 14
+#endif
+static int alarm(unsigned int seconds) { (void)seconds; return 0; }
+#define srandom(seed) srand(seed)
+#define random() rand()
+#endif
+
+#ifndef DATADIR
+#define DATADIR "."
+#endif
+#ifndef LIBDIR
+#define LIBDIR "."
+#endif
+
 #ifdef STDC_HEADERS
 # include <stdio.h>
 # include <stdlib.h>

@@ -36,6 +36,9 @@
 #include "sb_logger.h"
 
 #include "sb_ck_pr.h"
+#if defined(__MINGW32__)
+#define random() rand()
+#endif
 
 TLS sb_rng_state_t sb_rng_state CK_CC_CACHELINE;
 
