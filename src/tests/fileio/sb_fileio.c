@@ -343,7 +343,6 @@ static int file_mmap_done(void);
 
 /* Portability wrappers */
 static unsigned long sb_get_allocation_granularity(void);
-static void sb_free_memaligned(void *buf);
 static FILE_DESCRIPTOR sb_open(const char *);
 static int sb_create(const char *);
 
@@ -2011,15 +2010,6 @@ unsigned long sb_get_allocation_granularity(void)
   return info.dwAllocationGranularity;
 #else
   return sb_getpagesize();
-#endif
-}
-
-static void sb_free_memaligned(void *buf)
-{
-#if defined(_WIN32) && !defined(__MINGW32__)
-  VirtualFree(buf,0,MEM_FREE);
-#else
-  free(buf);
 #endif
 }
 

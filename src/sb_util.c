@@ -70,6 +70,17 @@ void *sb_memalign(size_t size, size_t alignment)
   return buf;
 }
 
+void sb_free_memaligned(void *buf)
+{
+#if defined(HAVE_POSIX_MEMALIGN) || defined(HAVE_MEMALIGN) || defined(HAVE_VALLOC)
+  free(buf);
+#elif defined(_WIN32)
+  VirtualFree(buf, 0, MEM_RELEASE);
+#else
+# error Cannot find an aligned allocation library function!
+#endif
+}
+
 /* Get OS page size */
 
 size_t sb_getpagesize(void)

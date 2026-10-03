@@ -68,6 +68,7 @@
 
 #include "sysbench.h"
 #include "sb_options.h"
+#include "sb_util.h"
 #include "sb_lua.h"
 #include "db_driver.h"
 #include "sb_rand.h"
@@ -1559,8 +1560,8 @@ end:
 
   sb_thread_done();
 
-  free(timers);
-  free(timers_copy);
+  sb_free_memaligned(timers);
+  sb_free_memaligned(timers_copy);
 
   free(sb_globals.argv);
 
